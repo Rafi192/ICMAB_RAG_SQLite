@@ -1,3 +1,4 @@
 .env
 icmab_env/
 config.py
+data/
