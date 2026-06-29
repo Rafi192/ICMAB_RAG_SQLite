@@ -1,28 +1,70 @@
 # ICMAB_RAG_SQLite
 
-#### model Architecture
+## Model Architecture
 
-`bash`
-
-`
-┌─────────────────────────────────────────────────────────┐
-│                    INGESTION PIPELINE                    │
-│                  (runs at startup + /admin/reindex)      │
-│                                                         │
-│  SQLite DB → Table Loaders → HTML Stripper → Chunker   │
-│            → Embedder (BGE-M3) → FAISS Index Builder   │
-└─────────────────────────────────────────────────────────┘
-                          ↓
-┌─────────────────────────────────────────────────────────┐
-│                    FAISS INDEX (RAM)                     │
-│         + metadata.pkl (chunk text + source info)       │
-└─────────────────────────────────────────────────────────┘
-                          ↓
-┌─────────────────────────────────────────────────────────┐
-│                   RETRIEVAL PIPELINE                     │
-│                                                         │
-│  User Query → Embed → FAISS Top-20 → Cross-Encoder     │
-│             Rerank → Top-5 → LLM → Answer              │
-└─────────────────────────────────────────────────────────┘
-
-`
+```text
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                          INGESTION PIPELINE                                 │
+│                   (Runs at startup and /admin/reindex)                      │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ SQLite Database                                                             │
+│        │                                                                    │
+│        ▼                                                                    │
+│ Table Loaders (Admission, News, Circular, etc.)                             │
+│        │                                                                    │
+│        ▼                                                                    │
+│ HTML/Text Cleaning (Strip HTML, Normalize Text)                             │
+│        │                                                                    │
+│        ▼                                                                    │
+│ Document Chunking                                                           │
+│        │                                                                    │
+│        ▼                                                                    │
+│ Embedding Generation (BAAI/bge-m3)                                          │
+│        │                                                                    │
+│        ▼                                                                    │
+│ FAISS Index Builder                                                         │
+│        │                                                                    │
+│        ├────────────► faiss.index                                           │
+│        └────────────► metadata.pkl (Chunk Text + Source Metadata)           │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                      │
+                                      ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                          KNOWLEDGE INDEX                                    │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ • FAISS Vector Index (Embeddings)                                           │
+│ • metadata.pkl (Chunk Text, Table Name, Record ID, URL, etc.)               │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                      │
+                                      ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                          RETRIEVAL PIPELINE                                 │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ User Query                                                                  │
+│        │                                                                    │
+│        ▼                                                                    │
+│ Query Preprocessing                                                         │
+│        │                                                                    │
+│        ▼                                                                    │
+│ Query Embedding (BAAI/bge-m3)                                               │
+│        │                                                                    │
+│        ▼                                                                    │
+│ FAISS Similarity Search (Top-20)                                            │
+│        │                                                                    │
+│        ▼                                                                    │
+│ Cross-Encoder Reranking                                                     │
+│ (cross-encoder/ms-marco-MiniLM-L-6-v2)                                      │
+│        │                                                                    │
+│        ▼                                                                    │
+│ Select Top-5 Context Chunks                                                 │
+│        │                                                                    │
+│        ▼                                                                    │
+│ Prompt Construction                                                         │
+│        │                                                                    │
+│        ▼                                                                    │
+│ LLM (GPT-4.1 / GPT-5 / Compatible Model)                                    │
+│        │                                                                    │
+│        ▼                                                                    │
+│ Final Answer + Source References                                            │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
