@@ -1,3 +1,8 @@
 .env
 icmab_env/
 config.py
+data/
+__pycache__/
+indexing/__pycache__/
+llm/__pycache__/
+retrieval/__pycache__/
