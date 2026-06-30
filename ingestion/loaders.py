@@ -29,7 +29,6 @@ def load_faqs() -> list[dict]:
         })
     return chunks
 
-
 def load_members() -> list[dict]:
     conn = get_conn()
     rows = conn.execute("""
@@ -44,14 +43,17 @@ def load_members() -> list[dict]:
     chunks = []
     for row in rows:
         id, name, position, email, cell, phone, mtype, dept, div = row
-        # Build natural language sentence — best for retrieval
-        text = f"{name} is {position}"
-        if dept: text += f" in the {dept} department"
-        if div:  text += f", {div} division"
-        if email: text += f". Email: {email}"
-        if cell:  text += f". Cell: {cell}"
-        if phone: text += f". Phone: {phone}"
-        text += f". Type: {mtype}."
+
+        # Lead with role-first phrasing — matches how questions are asked
+        text = f"{position} of ICMAB: {name}."
+        if dept and dept.strip() != position.strip():
+            text += f" Department: {dept}."
+        if div and div.strip() != position.strip():
+            text += f" Division: {div}."
+        if email: text += f" Email: {email}."
+        if cell:  text += f" Cell: {cell}."
+        if phone: text += f" Phone: {phone}."
+
         chunks.append({
             "text": text,
             "source_table": "members",
@@ -62,6 +64,38 @@ def load_members() -> list[dict]:
             "url": None
         })
     return chunks
+# def load_members() -> list[dict]:
+#     conn = get_conn()
+#     rows = conn.execute("""
+#         SELECT m.id, m.full_name, m.position, m.email, 
+#                m.cell, m.phone_number, m.type,
+#                d.name as department, v.name as division
+#         FROM members_members m
+#         LEFT JOIN members_memberdepartment d ON m.department_id = d.id
+#         LEFT JOIN members_memberdivision v ON m.division_id = v.id
+#     """).fetchall()
+#     conn.close()
+#     chunks = []
+#     for row in rows:
+#         id, name, position, email, cell, phone, mtype, dept, div = row
+#         # Build natural language sentence — best for retrieval
+#         text = f"{name} is {position}"
+#         if dept: text += f" in the {dept} department"
+#         if div:  text += f", {div} division"
+#         if email: text += f". Email: {email}"
+#         if cell:  text += f". Cell: {cell}"
+#         if phone: text += f". Phone: {phone}"
+#         text += f". Type: {mtype}."
+#         chunks.append({
+#             "text": text,
+#             "source_table": "members",
+#             "source_id": id,
+#             "title": name,
+#             "category": "contact",
+#             "date": None,
+#             "url": None
+#         })
+#     return chunks
 
 
 def load_admissions() -> list[dict]:
@@ -89,16 +123,17 @@ def load_admissions() -> list[dict]:
         })
     return chunks
 
+# ingestion/loaders.py — fixed loaders
 
 def load_notices() -> list[dict]:
     conn = get_conn()
     rows = conn.execute("""
-        SELECT id, title, description, created_at
+        SELECT id, title, description, publish_date
         FROM notice_management_notice
     """).fetchall()
     conn.close()
     chunks = []
-    for id, title, desc, created in rows:
+    for id, title, desc, publish_date in rows:
         text = f"Notice: {title}. {strip_html(desc)}"
         chunks.append({
             "text": text,
@@ -106,7 +141,7 @@ def load_notices() -> list[dict]:
             "source_id": id,
             "title": title,
             "category": "notice",
-            "date": created,
+            "date": publish_date,
             "url": None
         })
     return chunks
@@ -115,21 +150,26 @@ def load_notices() -> list[dict]:
 def load_events_news() -> list[dict]:
     conn = get_conn()
     rows = conn.execute("""
-        SELECT id, title, description, created_at, event_date
+        SELECT id, heading, subtitle, description, 
+               event_date, event_publish_date, category, status
         FROM event_or_news_management_event_or_news
     """).fetchall()
     conn.close()
     chunks = []
-    for id, title, desc, created, event_date in rows:
-        text = f"Event/News: {title}. {strip_html(desc)}"
-        if event_date: text += f" Date: {event_date}."
+    for id, heading, subtitle, desc, event_date, pub_date, cat, status in rows:
+        text = f"{cat.title()}: {heading}"
+        if subtitle:
+            text += f" - {subtitle}"
+        text += f". {strip_html(desc)}"
+        if event_date:
+            text += f" Event date: {event_date}."
         chunks.append({
             "text": text,
             "source_table": "event_news",
             "source_id": id,
-            "title": title,
-            "category": "event_news",
-            "date": event_date or created,
+            "title": heading,
+            "category": cat,
+            "date": event_date or pub_date,
             "url": None
         })
     return chunks
@@ -138,24 +178,27 @@ def load_events_news() -> list[dict]:
 def load_cpd_resources() -> list[dict]:
     conn = get_conn()
     rows = conn.execute("""
-        SELECT id, title, description, created_at
+        SELECT id, topic, venue, resource_person, 
+               date_of_program, download_link
         FROM cpd_resources_cpdresource
     """).fetchall()
     conn.close()
     chunks = []
-    for id, title, desc, created in rows:
-        text = f"CPD Resource: {title}. {strip_html(desc)}"
+    for id, topic, venue, person, date, link in rows:
+        text = f"CPD Program: {topic}."
+        if venue: text += f" Venue: {venue}."
+        if person: text += f" Resource Person: {strip_html(person)}."
+        if date: text += f" Date: {date}."
         chunks.append({
             "text": text,
             "source_table": "cpd",
             "source_id": id,
-            "title": title,
+            "title": topic,
             "category": "cpd",
-            "date": created,
-            "url": None
+            "date": date,
+            "url": link
         })
     return chunks
-
 
 def load_all() -> list[dict]:
     """Master loader — add new loaders here as needed."""

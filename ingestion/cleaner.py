@@ -1,5 +1,6 @@
 from bs4 import BeautifulSoup
 import re
+import unicodedata
 
 
 def strip_html(text:str) -> str:
@@ -8,7 +9,7 @@ def strip_html(text:str) -> str:
         return ""
     
     soup = BeautifulSoup(text, "html.parser")
-    clean = soup.get(separator=" ")
+    clean = soup.get_text(" ")
     clean = re.sub(r'\s+', ' ', clean).strip()
     return clean
 
@@ -19,3 +20,7 @@ def normalize(text:str)-> str:
     text = strip_html(text)
     text = re.sub(r'[^\w\s\.\,\?\!\-\(\)]', ' ', text)
     return re.sub(r'\s+', ' ', text).strip()
+
+def normalize_unicode(text:str) -> str:
+
+    return unicodedata.normalize("NFKD", text)
